@@ -1,0 +1,84 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloud-study-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+
+data:
+  cloud-study-dashboard.json: |
+    {
+      "title": "Cloud Study System",
+      "schemaVersion": 38,
+      "version": 1,
+      "panels": [
+
+        {
+          "type": "timeseries",
+          "title": "API Pods",
+          "targets": [
+            {
+              "expr": "count(kube_pod_info{namespace=\"cloud-study\", pod=~\"api.*\"})",
+              "legendFormat": "api pods"
+            }
+          ]
+        },
+
+        {
+          "type": "timeseries",
+          "title": "Worker Pods",
+          "targets": [
+            {
+              "expr": "count(kube_pod_info{namespace=\"cloud-study\", pod=~\"worker.*\"})",
+              "legendFormat": "worker pods"
+            }
+          ]
+        },
+
+        {
+          "type": "timeseries",
+          "title": "Infrastructure Pods",
+          "targets": [
+            {
+              "expr": "count(kube_pod_info{namespace!=\"cloud-study\"})",
+              "legendFormat": "infra pods"
+            }
+          ]
+        },
+
+        {
+          "type": "timeseries",
+          "title": "CPU Usage",
+          "targets": [
+            {
+              "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"cloud-study\"}[5m]))",
+              "legendFormat": "cpu usage"
+            }
+          ]
+        },
+
+        {
+          "type": "timeseries",
+          "title": "Memory Usage",
+          "targets": [
+            {
+              "expr": "sum(container_memory_usage_bytes{namespace=\"cloud-study\"})",
+              "legendFormat": "memory usage"
+            }
+          ]
+        },
+
+        {
+          "type": "timeseries",
+          "title": "Kafka Consumer Lag",
+          "targets": [
+            {
+              "expr": "kafka_consumergroup_lag",
+              "legendFormat": "consumer lag"
+            }
+          ]
+        }
+
+      ]
+    }

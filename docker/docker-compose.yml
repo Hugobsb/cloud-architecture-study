@@ -1,0 +1,63 @@
+services:
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    ports:
+      - "2181:2181"
+
+  kafka-init:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      kafka:
+        condition: service_started
+    entrypoint: 
+      - /bin/bash
+      - -c
+      - kafka-topics --create --if-not-exists --bootstrap-server kafka:9092 --topic text-processing --partitions 1 --replication-factor 1
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    healthcheck:
+      test: ["CMD", "cub", "kafka-ready", "-b", "localhost:9092", "1", "20"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  api:
+    build:
+      context: ../services/api
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      KAFKA_CLIENT_ID: api-service
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_TOPIC: text-processing
+
+  worker:
+    build:
+      context: ../services/worker
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      KAFKA_CLIENT_ID: worker-service
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_TOPIC: text-processing
+      KAFKA_GROUP_ID: text-processing-group

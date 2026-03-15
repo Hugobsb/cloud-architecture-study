@@ -1,0 +1,40 @@
+# Node
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Logs
+logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Terraform
+.terraform
+*.tfstate
+*.tfstate.*
+crash.log
+.terraform.lock.hcl
+
+# Kubernetes
+kubeconfig
+*.kubeconfig
+
+# Docker
+*.tar
+
+# IDE
+.vscode
+.idea
+
+# Build artifacts
+dist
+build
+coverage
