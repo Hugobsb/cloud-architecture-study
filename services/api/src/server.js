@@ -23,9 +23,12 @@ const producer = kafka.producer({
   createPartitioner: Partitioners.LegacyPartitioner
 });
 
+let kafkaReady = false;
+
 async function startKafka() {
   await producer.connect();
-  logger.debug("Kafka producer connected");
+  kafkaReady = true;
+  logger.info({ brokers: KAFKA_BROKERS, topic: KAFKA_TOPIC }, "Kafka producer connected");
 }
 
 app.post("/job", async (req, res) => {
@@ -40,10 +43,15 @@ app.post("/job", async (req, res) => {
     timestamp: new Date().toISOString()
   };
 
-  await producer.send({
-    topic: KAFKA_TOPIC,
-    messages: [{ value: JSON.stringify(message) }]
-  });
+  try {
+    await producer.send({
+      topic: KAFKA_TOPIC,
+      messages: [{ value: JSON.stringify(message) }]
+    });
+  } catch (error) {
+    logger.error({ err: error, topic: KAFKA_TOPIC }, "Failed to publish message to Kafka");
+    return res.status(503).json({ error: "failed to queue message" });
+  }
 
   res.json({
     status: "queued",
@@ -67,10 +75,32 @@ app.get("/health", (_, res) => {
   });
 });
 
-app.listen(PORT, async () => {
-  logger.info(`API running on port ${PORT}`);
+app.get("/ready", (_, res) => {
+  if (!kafkaReady) {
+    return res.status(503).json({
+      status: "not-ready",
+      service: "api"
+    });
+  }
 
-  await startKafka();
-
-  logger.info("API service is ready to accept jobs");
+  return res.status(200).json({
+    status: "ready",
+    service: "api"
+  });
 });
+
+async function bootstrap() {
+  try {
+    await startKafka();
+
+    app.listen(PORT, () => {
+      logger.info(`API running on port ${PORT}`);
+      logger.info("API service is ready to accept jobs");
+    });
+  } catch (error) {
+    logger.error({ err: error }, "Failed to initialize API service");
+    process.exit(1);
+  }
+}
+
+bootstrap();
