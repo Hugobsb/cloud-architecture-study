@@ -350,10 +350,28 @@ terraform init
 terraform apply
 ```
 
+The main cloud parameters are configurable in `terraform/environments/cloud/terraform.tfvars`:
+
+- `cluster_name`
+- `resource_group`
+- `location`
+- `node_count`
+- `vm_size`
+- `dns_prefix`
+- `registry_name`
+
+The same variables also have reasonable defaults in `terraform/environments/cloud/variables.tf`, so you can omit values that do not need customization.
+
 Fetch AKS credentials:
 
 ```bash
-az aks get-credentials --name cloud-study-cluster --resource-group cloud-study-rg
+az aks get-credentials --name <cluster_name> --resource-group <resource_group>
+```
+
+After `terraform apply`, you can inspect the resolved values with:
+
+```bash
+terraform output
 ```
 
 Install the shared platform components:
@@ -369,6 +387,15 @@ Deploy the application:
 ```bash
 ./scripts/environments/azure/deploy.sh
 ```
+
+The Azure deployment scripts also accept environment overrides, with defaults matching the Terraform defaults:
+
+- `AZURE_CLUSTER_NAME`
+- `AZURE_RESOURCE_GROUP`
+- `AZURE_REGISTRY_NAME`
+- `AZURE_REGISTRY_LOGIN_SERVER`
+
+If you keep Terraform and script values aligned, the images will be built and pushed to the same registry created by Terraform.
 
 The ingress manifest also uses `api.local` in AKS. For a quick test, resolve that host to the ingress external IP:
 

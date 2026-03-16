@@ -19,12 +19,14 @@ module "kubernetes" {
   resource_group_name = var.resource_group
   node_count          = var.node_count
   vm_size             = var.vm_size
+  dns_prefix          = var.dns_prefix
 }
 
 module "registry" {
   source = "../../modules/registry"
 
-  resource_group_name = var.resource_group
-  location            = var.location
+  registry_name        = var.registry_name
+  resource_group_name  = var.resource_group
+  location             = var.location
   aks_kubelet_identity = module.kubernetes.kubelet_identity_object_id
 }
