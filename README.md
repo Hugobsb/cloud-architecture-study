@@ -208,6 +208,18 @@ Prepare the local environment:
 ./scripts/environments/local/cluster-bootstrap.sh
 ```
 
+This manual bootstrap flow uses the default Minikube profile: `minikube`.
+
+Or provision the local cluster with Terraform:
+
+```bash
+cd terraform/environments/local
+terraform init
+terraform apply
+```
+
+This Terraform flow provisions Minikube with the `cloud-study` profile by default.
+
 Deploy services locally:
 
 ```bash
@@ -238,6 +250,13 @@ curl http://$(minikube ip)/job \
   -H "Host: api.local" \
   -H "Content-Type: application/json" \
   -d '{"text":"hello kafka kubernetes"}'
+```
+
+If you used the Terraform local environment instead, use the `cloud-study` profile in Minikube commands:
+
+```bash
+eval $(minikube -p cloud-study docker-env)
+minikube -p cloud-study ip
 ```
 
 ## Docker Compose flow
