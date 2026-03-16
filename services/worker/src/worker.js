@@ -17,6 +17,7 @@ const KAFKA_BROKERS = process.env.KAFKA_BROKERS.split(",");
 const KAFKA_TOPIC = process.env.KAFKA_TOPIC;
 const KAFKA_GROUP_ID = process.env.KAFKA_GROUP_ID;
 const OBSERVABILITY_PORT = Number(process.env.OBSERVABILITY_PORT || 3001);
+const CONSUME_FROM_BEGINNING = process.env.KAFKA_CONSUME_FROM_BEGINNING === "true";
 
 const kafka = new Kafka({
   clientId: KAFKA_CLIENT_ID,
@@ -43,7 +44,8 @@ const consumerState = {
   connected: false,
   subscribed: false,
   running: false,
-  crashed: false
+  crashed: false,
+  shuttingDown: false
 };
 
 function syncConsumerGauge() {
@@ -56,7 +58,40 @@ function isConsumerReady() {
   return consumerState.connected
     && consumerState.subscribed
     && consumerState.running
-    && !consumerState.crashed;
+    && !consumerState.crashed
+    && !consumerState.shuttingDown;
+}
+
+function setConsumerState(updates) {
+  Object.assign(consumerState, updates);
+  syncConsumerGauge();
+}
+
+function buildMessageContext({ topic, partition, message, payload }) {
+  return {
+    topic,
+    partition,
+    offset: message.offset,
+    payloadId: payload?.id ?? null
+  };
+}
+
+function logInfrastructureError(err, message, extra = {}) {
+  logger.error({
+    err,
+    errorType: "infrastructure",
+    topic: KAFKA_TOPIC,
+    groupId: KAFKA_GROUP_ID,
+    ...extra
+  }, message);
+}
+
+function logProcessingError(err, context = {}) {
+  logger.error({
+    err,
+    errorType: "processing",
+    ...context
+  }, "Failed to process Kafka message");
 }
 
 function createObservabilityServer() {
@@ -87,7 +122,8 @@ function createObservabilityServer() {
           connected: consumerState.connected,
           subscribed: consumerState.subscribed,
           running: consumerState.running,
-          crashed: consumerState.crashed
+          crashed: consumerState.crashed,
+          shuttingDown: consumerState.shuttingDown
         }
       }));
       return;
@@ -116,77 +152,124 @@ function processText(text) {
 }
 
 consumer.on(consumer.events.CONNECT, () => {
-  consumerState.connected = true;
-  consumerState.crashed = false;
-  syncConsumerGauge();
+  setConsumerState({
+    connected: true,
+    crashed: false
+  });
+  logger.info({
+    topic: KAFKA_TOPIC,
+    groupId: KAFKA_GROUP_ID
+  }, "Kafka consumer connected");
 });
 
 consumer.on(consumer.events.DISCONNECT, () => {
-  consumerState.connected = false;
-  consumerState.running = false;
-  syncConsumerGauge();
+  setConsumerState({
+    connected: false,
+    running: false
+  });
+  logger.info({
+    topic: KAFKA_TOPIC,
+    groupId: KAFKA_GROUP_ID,
+    shuttingDown: consumerState.shuttingDown
+  }, "Kafka consumer disconnected");
 });
 
 consumer.on(consumer.events.STOP, () => {
-  consumerState.running = false;
+  setConsumerState({ running: false });
+  logger.info({
+    topic: KAFKA_TOPIC,
+    groupId: KAFKA_GROUP_ID
+  }, "Kafka consumer stopped");
 });
 
 consumer.on(consumer.events.CRASH, ({ payload }) => {
-  consumerState.connected = false;
-  consumerState.running = false;
-  consumerState.crashed = true;
-  syncConsumerGauge();
-  logger.error({ err: payload.error }, "Kafka consumer crashed");
+  setConsumerState({
+    connected: false,
+    running: false,
+    crashed: true
+  });
+  logInfrastructureError(payload.error, "Kafka consumer crashed");
 });
 
 async function startWithRetry(retries = 0, maxRetries = 10) {
   try {
     await consumer.connect();
-    logger.debug("Worker connected to Kafka");
 
     await consumer.subscribe({
       topic: KAFKA_TOPIC,
-      fromBeginning: true
+      fromBeginning: CONSUME_FROM_BEGINNING
     });
 
-    consumerState.subscribed = true;
-    logger.info("Successfully subscribed to topic");
+    setConsumerState({ subscribed: true });
+    logger.info({
+      topic: KAFKA_TOPIC,
+      groupId: KAFKA_GROUP_ID,
+      fromBeginning: CONSUME_FROM_BEGINNING,
+      mode: CONSUME_FROM_BEGINNING ? "demo" : "continuous"
+    }, "Kafka consumer subscribed");
 
-    consumerState.running = true;
     await consumer.run({
-      eachMessage: async ({ message }) => {
+      eachMessage: async ({ topic, partition, message }) => {
         const endTimer = jobProcessingDurationSeconds.startTimer();
 
         try {
           const payload = JSON.parse(message.value.toString());
+          const context = buildMessageContext({ topic, partition, message, payload });
 
-          logger.info({ payload }, "Received message:");
+          setConsumerState({ running: true });
+          logger.info({
+            ...context,
+            groupId: KAFKA_GROUP_ID
+          }, "Received Kafka message");
 
           const result = processText(payload.text);
 
           jobsProcessedTotal.inc();
-          logger.info({ result }, "Processing result:");
+          logger.info({
+            ...context,
+            result,
+            groupId: KAFKA_GROUP_ID
+          }, "Processed Kafka message");
         } catch (err) {
           jobsFailedTotal.inc();
-          logger.error({ err }, "Failed to process Kafka message");
+          logProcessingError(err, {
+            topic,
+            partition,
+            offset: message.offset,
+            groupId: KAFKA_GROUP_ID
+          });
           throw err;
         } finally {
           endTimer();
         }
       }
     });
+
+    setConsumerState({ running: true });
+    logger.info({
+      topic: KAFKA_TOPIC,
+      groupId: KAFKA_GROUP_ID
+    }, "Kafka consumer is ready to consume");
   } catch (err) {
-    consumerState.connected = false;
-    consumerState.running = false;
-    syncConsumerGauge();
+    setConsumerState({
+      connected: false,
+      running: false
+    });
 
     if (retries < maxRetries) {
       const delay = Math.min(1000 * Math.pow(2, retries), 30000);
-      logger.warn({ err, retries, nextRetryIn: delay }, "Failed to start consumer, retrying...");
+      logger.warn({
+        err,
+        errorType: "infrastructure",
+        topic: KAFKA_TOPIC,
+        groupId: KAFKA_GROUP_ID,
+        retries,
+        nextRetryIn: delay
+      }, "Failed to start consumer, retrying");
       await new Promise(resolve => setTimeout(resolve, delay));
       return startWithRetry(retries + 1, maxRetries);
     }
-    logger.error({ err }, "Failed to start consumer after max retries");
+    logInfrastructureError(err, "Failed to start consumer after max retries");
     throw err;
   }
 }
@@ -194,18 +277,42 @@ async function startWithRetry(retries = 0, maxRetries = 10) {
 const observabilityServer = createObservabilityServer();
 
 async function shutdown(signal) {
-  logger.info({ signal }, "Shutting down worker");
+  if (consumerState.shuttingDown) {
+    logger.info({ signal }, "Shutdown already in progress");
+    return;
+  }
 
-  consumerState.running = false;
-  syncConsumerGauge();
+  setConsumerState({
+    running: false,
+    shuttingDown: true
+  });
+  logger.info({
+    signal,
+    topic: KAFKA_TOPIC,
+    groupId: KAFKA_GROUP_ID
+  }, "Starting graceful shutdown");
 
   try {
+    logger.info({
+      topic: KAFKA_TOPIC,
+      groupId: KAFKA_GROUP_ID
+    }, "Disconnecting Kafka consumer");
     await consumer.disconnect();
+    logger.info({
+      topic: KAFKA_TOPIC,
+      groupId: KAFKA_GROUP_ID
+    }, "Kafka consumer disconnected cleanly");
   } catch (err) {
-    logger.warn({ err }, "Failed to disconnect consumer cleanly");
+    logger.warn({
+      err,
+      errorType: "infrastructure",
+      topic: KAFKA_TOPIC,
+      groupId: KAFKA_GROUP_ID
+    }, "Failed to disconnect consumer cleanly");
   }
 
   observabilityServer.close(() => {
+    logger.info({ signal }, "Worker shutdown completed");
     process.exit(0);
   });
 }

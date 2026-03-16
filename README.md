@@ -190,6 +190,11 @@ The worker exposes a dedicated HTTP observability endpoint with:
 
 The readiness endpoint reflects the Kafka consumer state. The worker is only ready after the consumer is connected, subscribed, and running.
 
+The worker startup mode is configurable through `KAFKA_CONSUME_FROM_BEGINNING`:
+
+- `false` (default): normal continuous operation. The worker joins the consumer group and continues from committed offsets.
+- `true`: demo mode. The worker replays messages from the beginning of the topic, which is useful for walkthroughs and documentation examples.
+
 Worker application metrics include:
 
 - `jobs_processados_total`
@@ -255,6 +260,8 @@ Deploy services locally:
 eval $(minikube docker-env)
 ./scripts/environments/local/deploy.sh
 ```
+
+The worker runs in normal continuous mode by default in Kubernetes. If you want demo behavior for a walkthrough, set `KAFKA_CONSUME_FROM_BEGINNING=true` in the worker environment before deploying.
 
 Get the ingress IP:
 
