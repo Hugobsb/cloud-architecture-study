@@ -2,69 +2,40 @@
 
 set -euo pipefail
 
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-PROJECT_ROOT=$(cd "${SCRIPT_DIR}/../.." && pwd)
+source scripts/lib/bootstrap.sh
+source scripts/lib/config.sh
+source scripts/lib/k8s.sh
 
-NAMESPACE="monitoring"
+ensure_namespace "$NAMESPACE_MONITORING"
+ensure_helm_repo "$HELM_REPO_PROMETHEUS" "$HELM_REPO_PROMETHEUS_URL" "Prometheus"
+ensure_helm_repo "$HELM_REPO_GRAFANA" "$HELM_REPO_GRAFANA_URL" "Grafana"
 
-PROM_RELEASE="kube-prometheus-stack"
-LOKI_RELEASE="loki"
-
-PROM_REPO="prometheus-community"
-PROM_REPO_URL="https://prometheus-community.github.io/helm-charts"
-
-GRAFANA_REPO="grafana"
-GRAFANA_REPO_URL="https://grafana.github.io/helm-charts"
-
-echo "Checking namespace..."
-
-if ! kubectl get namespace $NAMESPACE >/dev/null 2>&1; then
-  echo "Creating namespace $NAMESPACE"
-  kubectl create namespace $NAMESPACE
-else
-  echo "Namespace already exists"
-fi
-
-echo "Checking Helm repos..."
-
-if ! helm repo list | grep -q "$PROM_REPO"; then
-  echo "Adding Prometheus repo"
-  helm repo add $PROM_REPO $PROM_REPO_URL
-fi
-
-if ! helm repo list | grep -q "$GRAFANA_REPO"; then
-  echo "Adding Grafana repo"
-  helm repo add $GRAFANA_REPO $GRAFANA_REPO_URL
-fi
-
+printf 'Updating Helm repos...\n'
 helm repo update
 
-echo "Installing Prometheus stack..."
-
-if helm list -n $NAMESPACE | grep -q $PROM_RELEASE; then
-  echo "Prometheus stack already installed"
+printf 'Installing Prometheus stack...\n'
+if helm_release_exists "$NAMESPACE_MONITORING" "$RELEASE_PROMETHEUS"; then
+  printf 'Prometheus stack already installed\n'
 else
-  helm install $PROM_RELEASE prometheus-community/kube-prometheus-stack \
-    --namespace $NAMESPACE
+  helm install "$RELEASE_PROMETHEUS" "$CHART_PROMETHEUS" \
+    --namespace "$NAMESPACE_MONITORING"
 fi
 
-echo "Installing Loki logging stack..."
-
-if helm list -n $NAMESPACE | grep -q $LOKI_RELEASE; then
-  echo "Loki already installed"
+printf 'Installing Loki logging stack...\n'
+if helm_release_exists "$NAMESPACE_MONITORING" "$RELEASE_LOKI"; then
+  printf 'Loki already installed\n'
 else
-  helm install loki grafana/loki \
-    -n $NAMESPACE \
-    -f "${PROJECT_ROOT}/scripts/general/helm/loki-values.yaml"
+  helm install "$RELEASE_LOKI" "$CHART_LOKI" \
+    -n "$NAMESPACE_MONITORING" \
+    -f "$LOKI_VALUES_FILE"
 fi
 
-echo "Installing Promtail..."
-
-if helm list -n $NAMESPACE | grep -q promtail; then
-  echo "Promtail already installed"
+printf 'Installing Promtail...\n'
+if helm_release_exists "$NAMESPACE_MONITORING" "$RELEASE_PROMTAIL"; then
+  printf 'Promtail already installed\n'
 else
-  helm install promtail grafana/promtail \
-    -n $NAMESPACE
+  helm install "$RELEASE_PROMTAIL" "$CHART_PROMTAIL" \
+    -n "$NAMESPACE_MONITORING"
 fi
 
-echo "Observability stack installation completed"
+printf 'Observability stack installation completed\n'

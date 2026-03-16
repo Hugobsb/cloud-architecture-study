@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 
-set -e
+set -euo pipefail
 
-NAMESPACE="monitoring"
+source scripts/lib/bootstrap.sh
+source scripts/lib/config.sh
 
 echo "Fetching Grafana admin password..."
 
-GRAFANA_PASSWORD=$(kubectl get secret kube-prometheus-stack-grafana \
-  -n $NAMESPACE \
+GRAFANA_PASSWORD=$(kubectl get secret "$GRAFANA_SECRET_NAME" \
+  -n "$NAMESPACE_MONITORING" \
   -o jsonpath="{.data.admin-password}" | base64 --decode)
 
 echo "Grafana password copied to clipboard"
@@ -25,14 +26,14 @@ fi
 
 echo "Starting port-forwards..."
 
-kubectl port-forward svc/kube-prometheus-stack-grafana \
-  -n $NAMESPACE \
+kubectl port-forward "svc/${GRAFANA_SERVICE_NAME}" \
+  -n "$NAMESPACE_MONITORING" \
   3000:80 >/dev/null 2>&1 &
 
 GRAFANA_PID=$!
 
-kubectl port-forward svc/kube-prometheus-stack-prometheus \
-  -n $NAMESPACE \
+kubectl port-forward "svc/${PROMETHEUS_SERVICE_NAME}" \
+  -n "$NAMESPACE_MONITORING" \
   9090:9090 >/dev/null 2>&1 &
 
 PROM_PID=$!

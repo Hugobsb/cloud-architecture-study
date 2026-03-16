@@ -1,44 +1,26 @@
 #!/usr/bin/env bash
 
-set -e
+set -euo pipefail
 
-NAMESPACE="ingress-nginx"
-RELEASE_NAME="ingress-nginx"
-REPO_NAME="ingress-nginx"
-REPO_URL="https://kubernetes.github.io/ingress-nginx"
+source scripts/lib/bootstrap.sh
+source scripts/lib/config.sh
+source scripts/lib/k8s.sh
 
-echo "Checking namespace..."
+ensure_namespace "$NAMESPACE_INGRESS"
+ensure_helm_repo "$HELM_REPO_INGRESS" "$HELM_REPO_INGRESS_URL" "ingress-nginx"
 
-if ! kubectl get namespace $NAMESPACE >/dev/null 2>&1; then
-  echo "Creating namespace $NAMESPACE"
-  kubectl create namespace $NAMESPACE
-else
-  echo "Namespace already exists"
-fi
-
-echo "Checking Helm repo..."
-
-if ! helm repo list | grep -q "$REPO_NAME"; then
-  echo "Adding ingress-nginx Helm repo"
-  helm repo add $REPO_NAME $REPO_URL
-else
-  echo "Helm repo already added"
-fi
-
-echo "Updating Helm repos..."
-
+printf 'Updating Helm repos...\n'
 helm repo update
 
-echo "Checking if ingress controller is already installed..."
-
-if helm list -n $NAMESPACE | grep -q $RELEASE_NAME; then
-  echo "Ingress controller already installed"
+printf 'Checking if ingress controller is already installed...\n'
+if helm_release_exists "$NAMESPACE_INGRESS" "$RELEASE_INGRESS"; then
+  printf 'Ingress controller already installed\n'
 else
-  echo "Installing NGINX ingress controller"
-  helm install $RELEASE_NAME ingress-nginx/ingress-nginx \
-    --namespace $NAMESPACE \
+  printf 'Installing NGINX ingress controller\n'
+  helm install "$RELEASE_INGRESS" "$CHART_INGRESS" \
+    --namespace "$NAMESPACE_INGRESS" \
     --set controller.publishService.enabled=true \
     --set controller.service.annotations."service\.beta\.kubernetes\.io/azure-load-balancer-health-probe-request-path"="/healthz"
 fi
 
-echo "Ingress installation completed"
+printf 'Ingress installation completed\n'

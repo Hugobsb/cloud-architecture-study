@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
-ACR_NAME="cloudstudyacr.azurecr.io"
+source scripts/lib/bootstrap.sh
+source scripts/lib/config.sh
 
 IMAGE_TAG=$(git rev-parse --short HEAD)
 
-API_IMAGE="$ACR_NAME/api:$IMAGE_TAG"
-WORKER_IMAGE="$ACR_NAME/worker:$IMAGE_TAG"
+API_IMAGE="$AZURE_ACR_NAME/api:$IMAGE_TAG"
+WORKER_IMAGE="$AZURE_ACR_NAME/worker:$IMAGE_TAG"
 
 export API_IMAGE
 export WORKER_IMAGE
@@ -22,13 +23,13 @@ kubectl apply -f k8s/reliability
 
 echo "Building images..."
 
-docker build -t $API_IMAGE services/api
-docker build -t $WORKER_IMAGE services/worker
+docker build -t "$API_IMAGE" services/api
+docker build -t "$WORKER_IMAGE" services/worker
 
 echo "Pushing images..."
 
-docker push $API_IMAGE
-docker push $WORKER_IMAGE
+docker push "$API_IMAGE"
+docker push "$WORKER_IMAGE"
 
 echo "Deploying images to AKS..."
 

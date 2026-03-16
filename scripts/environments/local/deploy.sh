@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+source scripts/lib/bootstrap.sh
+source scripts/lib/config.sh
+
 IMAGE_TAG=$(git rev-parse --short HEAD 2>/dev/null || printf 'local')
 API_IMAGE="api:${IMAGE_TAG}"
 WORKER_IMAGE="worker:${IMAGE_TAG}"
