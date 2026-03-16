@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 
-set -e
+set -euo pipefail
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+PROJECT_ROOT=$(cd "${SCRIPT_DIR}/../.." && pwd)
 
 NAMESPACE="monitoring"
 
@@ -52,7 +55,7 @@ if helm list -n $NAMESPACE | grep -q $LOKI_RELEASE; then
 else
   helm install loki grafana/loki \
     -n $NAMESPACE \
-    -f scripts/general/helm/loki-values.yaml
+    -f "${PROJECT_ROOT}/scripts/general/helm/loki-values.yaml"
 fi
 
 echo "Installing Promtail..."
