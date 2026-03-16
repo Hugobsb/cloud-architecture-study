@@ -1,31 +1,26 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-set -e
+STRIMZI_NAMESPACE="strimzi"
 
-echo "Starting Minikube cluster..."
-
+printf 'Starting Minikube cluster...\n'
 minikube start
 
-echo "Enabling Ingress addon..."
-
+printf 'Enabling Ingress addon...\n'
 minikube addons enable ingress
 
-echo "Creating namespaces..."
+printf 'Creating namespaces...\n'
+for namespace in "$STRIMZI_NAMESPACE" monitoring cloud-study; do
+  kubectl create namespace "$namespace" --dry-run=client -o yaml | kubectl apply -f -
+done
 
-kubectl create namespace kafka --dry-run=client -o yaml | kubectl apply -f -
-kubectl create namespace strimzi --dry-run=client -o yaml | kubectl apply -f -
-kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
-kubectl create namespace cloud-study --dry-run=client -o yaml | kubectl apply -f -
+printf 'Installing Strimzi operator in namespace %s...\n' "$STRIMZI_NAMESPACE"
+kubectl apply -f "https://strimzi.io/install/latest?namespace=${STRIMZI_NAMESPACE}" -n "$STRIMZI_NAMESPACE"
 
-echo "Installing Strimzi operator..."
-
-kubectl apply -f https://strimzi.io/install/latest?namespace=strimzi -n strimzi
-
-echo "Waiting for Strimzi operator..."
-
+printf 'Waiting for Strimzi operator...\n'
 kubectl wait deployment strimzi-cluster-operator \
   --for=condition=Available \
-  -n strimzi \
+  -n "$STRIMZI_NAMESPACE" \
   --timeout=120s
 
-echo "Bootstrap complete."
+printf 'Bootstrap complete.\n'

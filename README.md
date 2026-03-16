@@ -228,6 +228,16 @@ For a simpler approach, you can also use Docker Compose:
 ./scripts/environments/local/dev-up.sh # dev-down.sh to stop
 ```
 
+This flow is intentionally simplified to make application-layer testing faster and easier. It is useful when you want to validate the API and worker behavior without going through the full Kubernetes + Strimzi stack.
+
+It still keeps the local Kafka runtime closer to the Kubernetes setup than the old ZooKeeper-based version:
+
+- Kafka runs in KRaft mode, without ZooKeeper.
+- The application still uses the same topic name: `text-processing`.
+- The topic is created with 3 partitions to match the Kubernetes manifests.
+
+Even so, this is still a simplified developer workflow. The closest environment to production is the local Kubernetes flow, because that path uses Minikube plus the same Strimzi-managed Kafka model used by the Kubernetes manifests.
+
 Send a test request:
 
 ``` bash
