@@ -11,7 +11,7 @@ data:
     {
       "title": "Cloud Study System",
       "schemaVersion": 38,
-      "version": 2,
+      "version": 3,
       "panels": [
         {
           "type": "timeseries",
@@ -70,6 +70,46 @@ data:
             {
               "expr": "sum(rate(process_cpu_user_seconds_total{job=\"api\"}[5m]))",
               "legendFormat": "api cpu user seconds"
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "Worker Throughput",
+          "targets": [
+            {
+              "expr": "sum(rate(jobs_processados_total{job=\"worker\"}[5m]))",
+              "legendFormat": "jobs/s"
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "Worker Failures",
+          "targets": [
+            {
+              "expr": "sum(rate(jobs_falhos_total{job=\"worker\"}[5m]))",
+              "legendFormat": "failed jobs/s"
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "Worker Processing Latency P95",
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(job_processing_duration_seconds_bucket{job=\"worker\"}[5m])) by (le))",
+              "legendFormat": "p95"
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "Kafka Consumer Lag",
+          "targets": [
+            {
+              "expr": "sum(kafka_consumergroup_lag{consumergroup=\"text-processing-group\"})",
+              "legendFormat": "lag"
             }
           ]
         }

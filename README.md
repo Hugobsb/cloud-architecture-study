@@ -36,9 +36,11 @@ ServiceAPI --> PodAPI[API Pod]
 PodAPI --> Kafka[(Kafka Cluster)]
 
 Kafka --> WorkerPod[Worker Pod]
+KafkaExporter[Strimzi Kafka Exporter] --> Kafka
 
 Prometheus --> PodAPI
-Prometheus --> Kafka
+Prometheus --> WorkerPod
+Prometheus --> KafkaExporter
 
 Promtail --> PodAPI
 Promtail --> WorkerPod
@@ -68,10 +70,14 @@ API_Pod2 --> Kafka
 
 Kafka --> Worker1
 Kafka --> Worker2
+KafkaExporter[Kafka Exporter]
 
 Prometheus[Prometheus]
 Prometheus --> API_Pod1
 Prometheus --> API_Pod2
+Prometheus --> Worker1
+Prometheus --> Worker2
+Prometheus --> KafkaExporter
 
 Promtail[Promtail<br/>Log Collector]
 Promtail --> API_Pod1
@@ -141,7 +147,7 @@ Worker-->>Logs: output result
 4. Worker processes the text payload and logs results.
 5. Promtail collects logs from all services.
 6. Logs are aggregated in Loki.
-7. Prometheus scrapes API metrics and Kubernetes metrics.
+7. Prometheus scrapes API metrics, worker metrics, Kafka exporter metrics, and Kubernetes metrics.
 8. Grafana dashboards visualize system metrics and logs.
 
 ---
@@ -170,15 +176,38 @@ Metrics can be visualized in both Grafana and Prometheus.
 The current project exposes and dashboards metrics from:
 
 - API service
+- Worker service
+- Kafka consumer groups through Strimzi Kafka Exporter
 - Kubernetes infrastructure
 
-Dashboards include:
+Prometheus scraping is configured with ServiceMonitors for the API, worker, and Kafka exporter.
+
+The worker exposes a dedicated HTTP observability endpoint with:
+
+- `/metrics`
+- `/health`
+- `/ready`
+
+The readiness endpoint reflects the Kafka consumer state. The worker is only ready after the consumer is connected, subscribed, and running.
+
+Worker application metrics include:
+
+- `jobs_processados_total`
+- `jobs_falhos_total`
+- `job_processing_duration_seconds`
+- `kafka_consumer_connected`
+
+The Grafana dashboard includes:
 
 - API pod count
 - Worker pod count
 - Infrastructure pod count
 - CPU usage
 - Memory usage
+- worker throughput
+- worker failures
+- worker processing latency
+- kafka consumer lag
 
 ## Logging
 

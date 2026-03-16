@@ -13,6 +13,7 @@ export WORKER_IMAGE
 
 printf 'Deploying resources to local Kubernetes...\n'
 kubectl apply -f k8s/api/api-service.yaml
+kubectl apply -f k8s/worker/worker-service.yaml
 kubectl apply -f k8s/kafka
 kubectl apply -f k8s/apps
 kubectl apply -f k8s/observability
