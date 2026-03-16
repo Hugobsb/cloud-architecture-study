@@ -11,9 +11,8 @@ data:
     {
       "title": "Cloud Study System",
       "schemaVersion": 38,
-      "version": 1,
+      "version": 2,
       "panels": [
-
         {
           "type": "timeseries",
           "title": "API Pods",
@@ -24,7 +23,6 @@ data:
             }
           ]
         },
-
         {
           "type": "timeseries",
           "title": "Worker Pods",
@@ -35,7 +33,6 @@ data:
             }
           ]
         },
-
         {
           "type": "timeseries",
           "title": "Infrastructure Pods",
@@ -46,7 +43,6 @@ data:
             }
           ]
         },
-
         {
           "type": "timeseries",
           "title": "CPU Usage",
@@ -57,7 +53,6 @@ data:
             }
           ]
         },
-
         {
           "type": "timeseries",
           "title": "Memory Usage",
@@ -68,17 +63,15 @@ data:
             }
           ]
         },
-
         {
           "type": "timeseries",
-          "title": "Kafka Consumer Lag",
+          "title": "API Process CPU User Seconds",
           "targets": [
             {
-              "expr": "kafka_consumergroup_lag",
-              "legendFormat": "consumer lag"
+              "expr": "sum(rate(process_cpu_user_seconds_total{job=\"api\"}[5m]))",
+              "legendFormat": "api cpu user seconds"
             }
           ]
         }
-
       ]
     }

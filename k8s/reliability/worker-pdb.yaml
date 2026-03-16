@@ -4,7 +4,7 @@ metadata:
   name: worker-pdb
   namespace: cloud-study
 spec:
-  minAvailable: 1
+  maxUnavailable: 1
   selector:
     matchLabels:
       app: worker

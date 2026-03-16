@@ -1,45 +1,35 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
-IMAGE_TAG=$(git rev-parse --short HEAD)
-
-API_IMAGE="api:$IMAGE_TAG"
-WORKER_IMAGE="worker:$IMAGE_TAG"
+IMAGE_TAG=$(git rev-parse --short HEAD 2>/dev/null || printf 'local')
+API_IMAGE="api:${IMAGE_TAG}"
+WORKER_IMAGE="worker:${IMAGE_TAG}"
 
 export API_IMAGE
 export WORKER_IMAGE
 
-echo "Deploying resources to AKS..."
-
-kubectl apply -f k8s/namespace.yaml
+printf 'Deploying resources to local Kubernetes...\n'
+kubectl apply -f k8s/api/api-service.yaml
 kubectl apply -f k8s/kafka
 kubectl apply -f k8s/apps
 kubectl apply -f k8s/observability
 kubectl apply -f k8s/observability/dashboards
 kubectl apply -f k8s/reliability
 
-echo "Verifying Docker environment..."
-
+printf 'Verifying Docker environment...\n'
 if [[ -z "${DOCKER_HOST:-}" ]]; then
-  echo "ERROR: Docker is not pointing to Minikube."
-  echo "Run: eval \$(minikube docker-env)"
+  printf 'ERROR: Docker is not pointing to Minikube.\n'
+  printf 'Run: eval $(minikube docker-env)\n'
   exit 1
 fi
 
-echo "Docker environment is set up correctly."
+printf 'Docker environment is set up correctly.\n'
+printf 'Building images...\n'
+docker build -t "$API_IMAGE" services/api
+docker build -t "$WORKER_IMAGE" services/worker
 
-echo "Building images..."
-
-docker build -t $API_IMAGE services/api
-docker build -t $WORKER_IMAGE services/worker
-
-echo "Deploying images..."
-
+printf 'Deploying workloads...\n'
 envsubst < k8s/api/api-deployment.yaml | kubectl apply -f -
 envsubst < k8s/worker/worker-deployment.yaml | kubectl apply -f -
 
-echo "Deploying services..."
-
-kubectl apply -f k8s/api/api-service.yaml
-
-echo "Deployment completed"
+printf 'Deployment completed.\n'

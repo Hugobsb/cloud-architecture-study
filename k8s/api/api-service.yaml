@@ -3,11 +3,13 @@ kind: Service
 metadata:
   name: api
   namespace: cloud-study
+  labels:
+    app: api
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: api
   ports:
-    - port: 3000
+    - name: http
+      port: 3000
       targetPort: 3000
-      nodePort: 30007
