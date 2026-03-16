@@ -4,6 +4,11 @@ set -euo pipefail
 source scripts/lib/bootstrap.sh
 source scripts/lib/config.sh
 
+require_command kubectl "Install kubectl and authenticate against the AKS cluster."
+require_command docker "Install Docker to build the application images."
+require_command envsubst "Install envsubst (usually provided by gettext)."
+require_kubectl_context
+
 IMAGE_TAG=$(git rev-parse --short HEAD)
 
 API_IMAGE="$AZURE_ACR_NAME/api:$IMAGE_TAG"

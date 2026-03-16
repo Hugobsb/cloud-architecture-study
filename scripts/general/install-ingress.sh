@@ -6,6 +6,10 @@ source scripts/lib/bootstrap.sh
 source scripts/lib/config.sh
 source scripts/lib/k8s.sh
 
+require_command kubectl "Install kubectl and authenticate against the target cluster."
+require_command helm "Install Helm before installing ingress-nginx."
+require_kubectl_context
+
 ensure_namespace "$NAMESPACE_INGRESS"
 ensure_helm_repo "$HELM_REPO_INGRESS" "$HELM_REPO_INGRESS_URL" "ingress-nginx"
 

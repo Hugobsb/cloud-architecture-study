@@ -4,6 +4,10 @@ set -euo pipefail
 source scripts/lib/bootstrap.sh
 source scripts/lib/config.sh
 
+require_command minikube "Install Minikube to create the local Kubernetes cluster."
+require_command kubectl "Install kubectl and configure it to talk to Minikube."
+require_command helm "Install Helm to install Strimzi and the observability stack."
+
 MINIKUBE_PROFILE="${MINIKUBE_PROFILE:-minikube}"
 MINIKUBE_DRIVER="${MINIKUBE_DRIVER:-}"
 MINIKUBE_KUBERNETES_VERSION="${MINIKUBE_KUBERNETES_VERSION:-}"
@@ -35,14 +39,13 @@ fi
 
 printf 'Starting Minikube cluster (profile: %s)...\n' "$MINIKUBE_PROFILE"
 minikube "${MINIKUBE_START_ARGS[@]}"
+require_kubectl_context
 
 printf 'Enabling Ingress addon...\n'
 minikube addons enable ingress --profile="$MINIKUBE_PROFILE"
 
-printf 'Creating namespaces...\n'
-for namespace in "$NAMESPACE_APP"; do
-  kubectl create namespace "$namespace" --dry-run=client -o yaml | kubectl apply -f -
-done
+printf 'Applying application namespace manifest...\n'
+kubectl apply -f k8s/namespace.yaml
 
 printf 'Installing Strimzi operator...\n'
 ./scripts/general/install-strimzi.sh
@@ -57,3 +60,5 @@ printf 'Installing observability stack...\n'
 ./scripts/general/install-observability.sh
 
 printf 'Bootstrap complete.\n'
+printf 'If you plan to build images into Minikube, run:\n'
+printf '  eval $(minikube -p %s docker-env)\n' "$MINIKUBE_PROFILE"

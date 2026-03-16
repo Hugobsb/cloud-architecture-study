@@ -224,90 +224,35 @@ Logs are collected and aggregated using Loki and Promtail:
 
 ---
 
-# Running Locally
+# Running The Project
 
-Requirements:
+## Local Docker Compose
 
-- Docker
-- Kubernetes
-- kubectl
-- Helm
-- Minikube
+Use this flow for the fastest local feedback loop without Kubernetes.
 
-## Local Kubernetes flow
+Prerequisites:
 
-Prepare the local environment:
+- Docker with `docker compose`
+
+Start the stack:
 
 ```bash
-./scripts/environments/local/cluster-bootstrap.sh
+./scripts/environments/local/dev-up.sh
 ```
 
-This manual bootstrap flow uses the default Minikube profile: `minikube`.
-
-Or provision the local cluster with Terraform:
+Stop it:
 
 ```bash
-cd terraform/environments/local
-terraform init
-terraform apply
+./scripts/environments/local/dev-down.sh
 ```
 
-This Terraform flow provisions Minikube with the `cloud-study` profile by default.
-
-Deploy services locally:
+Stream logs:
 
 ```bash
-eval $(minikube docker-env)
-./scripts/environments/local/deploy.sh
+./scripts/environments/local/dev-logs.sh
 ```
 
-The worker runs in normal continuous mode by default in Kubernetes. If you want demo behavior for a walkthrough, set `KAFKA_CONSUME_FROM_BEGINNING=true` in the worker environment before deploying.
-
-Get the ingress IP:
-
-```bash
-minikube ip
-```
-
-This flow is intentionally simplified to make application-layer testing faster and easier. It is useful when you want to validate the API and worker behavior without going through the full Kubernetes + Strimzi stack.
-
-It still keeps the local Kafka runtime closer to the Kubernetes setup than the old ZooKeeper-based version:
-
-- Kafka runs in KRaft mode, without ZooKeeper.
-- The application still uses the same topic name: `text-processing`.
-- The topic is created with 3 partitions to match the Kubernetes manifests.
-
-Even so, this is still a simplified developer workflow. The closest environment to production is the local Kubernetes flow, because that path uses Minikube plus the same Strimzi-managed Kafka model used by the Kubernetes manifests.
-
-Send a test request:
-
-```bash
-curl http://$(minikube ip)/job \
-  -H "Host: api.local" \
-  -H "Content-Type: application/json" \
-  -d '{"text":"hello kafka kubernetes"}'
-```
-
-If you used the Terraform local environment instead, use the `cloud-study` profile in Minikube commands:
-
-```bash
-eval $(minikube -p cloud-study docker-env)
-minikube -p cloud-study ip
-```
-
-## Docker Compose flow
-
-For a simpler local-only flow, you can also use Docker Compose:
-
-```bash
-./scripts/environments/local/dev-up.sh   # dev-down.sh to stop
-```
-
-The Compose environment intentionally mirrors the Kubernetes message layer more closely now:
-
-- Kafka runs in KRaft mode, without ZooKeeper.
-- The application still uses the same topic name: `text-processing`.
-- The topic is created with 3 partitions to match the Kubernetes manifests.
+This flow exposes the API directly on `localhost:3000`, so no ingress or host mapping is required.
 
 Send a test request:
 
@@ -317,11 +262,87 @@ curl http://localhost:3000/job \
   -d '{"text":"hello kafka kubernetes"}'
 ```
 
----
+## Local Minikube / Kubernetes
 
-# Deploying to Azure
+Use this flow for the local setup that is closest to the Kubernetes manifests in the repository.
 
-After authenticating with Azure CLI (`az login`), provision the infrastructure:
+Prerequisites:
+
+- Docker
+- Minikube
+- kubectl
+- Helm
+- `envsubst` from GNU `gettext`
+
+Bootstrap the local cluster and shared platform components:
+
+```bash
+./scripts/environments/local/cluster-bootstrap.sh
+```
+
+By default this script uses the Minikube profile `minikube`.
+
+If you prefer provisioning the local cluster with Terraform:
+
+```bash
+cd terraform/environments/local
+terraform init
+terraform apply
+```
+
+That Terraform flow provisions Minikube with the `cloud-study` profile and outputs the exact `docker-env` command to use.
+
+Before deploying workloads, point Docker to the Minikube image daemon:
+
+```bash
+eval $(minikube docker-env)
+```
+
+If you used the Terraform-managed profile instead:
+
+```bash
+eval $(minikube -p cloud-study docker-env)
+```
+
+Deploy the workloads:
+
+```bash
+./scripts/environments/local/deploy.sh
+```
+
+The ingress host is `api.local`. You can either add it to `/etc/hosts` or avoid that step with `curl --resolve`.
+
+To add the host entry:
+
+```bash
+echo "$(minikube ip) api.local" | sudo tee -a /etc/hosts
+```
+
+To test without editing `/etc/hosts`:
+
+```bash
+curl --resolve api.local:80:$(minikube ip) http://api.local/job \
+  -H "Content-Type: application/json" \
+  -d '{"text":"hello kafka kubernetes"}'
+```
+
+The worker runs in normal continuous mode by default in Kubernetes. If you want demo behavior for walkthroughs, set `KAFKA_CONSUME_FROM_BEGINNING=true` in the worker environment before deploying.
+
+## Cloud / AKS
+
+Use this flow for the Azure Kubernetes Service deployment.
+
+Prerequisites:
+
+- Azure CLI authenticated with `az login`
+- Terraform
+- Docker
+- kubectl
+- Helm
+- `envsubst` from GNU `gettext`
+- Access to push images to the configured Azure Container Registry
+
+Provision the Azure infrastructure:
 
 ```bash
 cd terraform/environments/cloud
@@ -329,7 +350,7 @@ terraform init
 terraform apply
 ```
 
-Fetch cluster credentials:
+Fetch AKS credentials:
 
 ```bash
 az aks get-credentials --name cloud-study-cluster --resource-group cloud-study-rg
@@ -343,10 +364,19 @@ Install the shared platform components:
 ./scripts/general/install-strimzi.sh
 ```
 
-Deploy services:
+Deploy the application:
 
 ```bash
 ./scripts/environments/azure/deploy.sh
+```
+
+The ingress manifest also uses `api.local` in AKS. For a quick test, resolve that host to the ingress external IP:
+
+```bash
+INGRESS_IP=$(kubectl get svc ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+curl --resolve api.local:80:${INGRESS_IP} http://api.local/job \
+  -H "Content-Type: application/json" \
+  -d '{"text":"hello kafka kubernetes"}'
 ```
 
 ---
@@ -382,8 +412,7 @@ Deploy services:
 # Example Request
 
 ```bash
-curl http://$(minikube ip)/job \
-  -H "Host: api.local" \
+curl --resolve api.local:80:$(minikube ip) http://api.local/job \
   -H "Content-Type: application/json" \
   -d '{"text":"hello kafka kubernetes hello"}'
 ```
@@ -412,9 +441,14 @@ The worker processes the message and logs the result (word frequency analysis):
 
 ---
 
-# Future Improvements
+# Troubleshooting
 
-Planned improvements for future iterations:
+- `Docker is not pointing to the Minikube image daemon`: run `eval $(minikube docker-env)` or the profile-specific command from the Terraform local outputs before `./scripts/environments/local/deploy.sh`.
+- `Could not resolve host: api.local`: add `api.local` to `/etc/hosts` with the current ingress IP, or use `curl --resolve`.
+- `kubectl has no current context configured`: start Minikube or fetch AKS credentials before running the Kubernetes scripts.
+- `ImagePullBackOff` on AKS: confirm the images were pushed to the configured ACR and that the AKS kubelet identity can pull them.
+
+# Future Improvements
 
 - Dead Letter Queue (DLQ)
 - Horizontal Pod Autoscaling

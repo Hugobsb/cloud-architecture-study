@@ -6,6 +6,11 @@ source scripts/lib/bootstrap.sh
 source scripts/lib/config.sh
 source scripts/lib/k8s.sh
 
+require_command kubectl "Install kubectl and authenticate against the target cluster."
+require_command helm "Install Helm before installing the observability stack."
+require_kubectl_context
+require_file "$LOKI_VALUES_FILE"
+
 ensure_namespace "$NAMESPACE_MONITORING"
 ensure_helm_repo "$HELM_REPO_PROMETHEUS" "$HELM_REPO_PROMETHEUS_URL" "Prometheus"
 ensure_helm_repo "$HELM_REPO_GRAFANA" "$HELM_REPO_GRAFANA_URL" "Grafana"
