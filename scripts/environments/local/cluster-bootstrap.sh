@@ -3,6 +3,7 @@ set -euo pipefail
 
 source scripts/lib/bootstrap.sh
 source scripts/lib/config.sh
+source scripts/lib/k8s.sh
 
 require_command minikube "Install Minikube to create the local Kubernetes cluster."
 require_command kubectl "Install kubectl and configure it to talk to Minikube."
