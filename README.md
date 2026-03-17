@@ -326,6 +326,14 @@ curl --resolve api.local:80:$(minikube ip) http://api.local/job \
   -d '{"text":"hello kafka kubernetes"}'
 ```
 
+Or, if you used the Terraform-managed profile:
+
+```bash
+curl --resolve api.local:80:$(minikube ip -p cloud-study) http://api.local/job \
+  -H "Content-Type: application/json" \
+  -d '{"text":"hello kafka kubernetes"}'
+```
+
 The worker runs in normal continuous mode by default in Kubernetes. If you want demo behavior for walkthroughs, set `KAFKA_CONSUME_FROM_BEGINNING=true` in the worker environment before deploying.
 
 ## Cloud / AKS
