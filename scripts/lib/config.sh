@@ -35,8 +35,12 @@ readonly PROMETHEUS_SERVICE_NAME="${RELEASE_PROMETHEUS}-prometheus"
 
 readonly DOCKER_COMPOSE_FILE="docker/docker-compose.yml"
 readonly LOKI_VALUES_FILE="scripts/general/helm/loki-values.yaml"
+readonly K8S_BASE_DIR="k8s/base"
+readonly K8S_KUBERNETES_OVERLAY_DIR="k8s/overlays/kubernetes"
+readonly K8S_OPENSHIFT_OVERLAY_DIR="k8s/overlays/openshift"
 
 readonly AZURE_CLUSTER_NAME="${AZURE_CLUSTER_NAME:-cloud-study-cluster}"
 readonly AZURE_RESOURCE_GROUP="${AZURE_RESOURCE_GROUP:-cloud-study-rg}"
 readonly AZURE_REGISTRY_NAME="${AZURE_REGISTRY_NAME:-cloudstudyacr}"
 readonly AZURE_REGISTRY_LOGIN_SERVER="${AZURE_REGISTRY_LOGIN_SERVER:-${AZURE_REGISTRY_NAME}.azurecr.io}"
+readonly DEFAULT_OPENSHIFT_PROJECT="${NAMESPACE_APP}"

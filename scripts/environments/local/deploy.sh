@@ -19,13 +19,13 @@ export WORKER_IMAGE
 
 printf 'Deploying resources to local Kubernetes...\n'
 kubectl apply -f k8s/namespace.yaml
-kubectl apply -f k8s/api/api-service.yaml
-kubectl apply -f k8s/worker/worker-service.yaml
-kubectl apply -f k8s/kafka
-kubectl apply -f k8s/apps
-kubectl apply -f k8s/observability
-kubectl apply -f k8s/observability/dashboards
-kubectl apply -f k8s/reliability
+kubectl apply -f "${K8S_BASE_DIR}/api/api-service.yaml"
+kubectl apply -f "${K8S_BASE_DIR}/worker/worker-service.yaml"
+kubectl apply -f "${K8S_BASE_DIR}/kafka"
+kubectl apply -f "${K8S_KUBERNETES_OVERLAY_DIR}/apps"
+kubectl apply -f "${K8S_BASE_DIR}/observability"
+kubectl apply -f "${K8S_BASE_DIR}/observability/dashboards"
+kubectl apply -f "${K8S_BASE_DIR}/reliability"
 
 printf 'Verifying Docker environment...\n'
 if [[ -z "${DOCKER_HOST:-}" ]]; then
@@ -41,8 +41,8 @@ docker build -t "$API_IMAGE" services/api
 docker build -t "$WORKER_IMAGE" services/worker
 
 printf 'Deploying workloads...\n'
-envsubst < k8s/api/api-deployment.yaml | kubectl apply -f -
-envsubst < k8s/worker/worker-deployment.yaml | kubectl apply -f -
+envsubst < "${K8S_BASE_DIR}/api/api-deployment.yaml" | kubectl apply -f -
+envsubst < "${K8S_BASE_DIR}/worker/worker-deployment.yaml" | kubectl apply -f -
 
 printf 'Deployment completed.\n'
 printf 'If ingress is enabled, map api.local to the Minikube IP or use curl --resolve.\n'

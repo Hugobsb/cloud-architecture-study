@@ -285,7 +285,7 @@ By default this script uses the Minikube profile `minikube`.
 If you prefer provisioning the local cluster with Terraform:
 
 ```bash
-cd terraform/environments/local
+cd terraform/environments/local/kubernetes
 terraform init
 terraform apply
 ```
@@ -353,12 +353,12 @@ Prerequisites:
 Provision the Azure infrastructure:
 
 ```bash
-cd terraform/environments/cloud
+cd terraform/environments/clouds/azure
 terraform init
 terraform apply
 ```
 
-The main cloud parameters are configurable in `terraform/environments/cloud/terraform.tfvars`:
+The main cloud parameters are configurable in `terraform/environments/clouds/azure/terraform.tfvars`:
 
 - `cluster_name`
 - `resource_group`
@@ -368,7 +368,7 @@ The main cloud parameters are configurable in `terraform/environments/cloud/terr
 - `dns_prefix`
 - `registry_name`
 
-The same variables also have reasonable defaults in `terraform/environments/cloud/variables.tf`, so you can omit values that do not need customization.
+The same variables also have reasonable defaults in `terraform/environments/clouds/azure/variables.tf`, so you can omit values that do not need customization.
 
 Fetch AKS credentials:
 
@@ -414,6 +414,53 @@ curl --resolve api.local:80:${INGRESS_IP} http://api.local/job \
   -d '{"text":"hello kafka kubernetes"}'
 ```
 
+## OpenShift Local
+
+Use this flow for the OpenShift target that stays closest to a restricted project-scoped environment.
+
+Prerequisites:
+
+- OpenShift Local (`crc`) installed and configured
+- OpenShift CLI (`oc`)
+- `kubectl`
+- Podman
+- `envsubst` from GNU `gettext`
+
+Bootstrap OpenShift Local directly:
+
+```bash
+./scripts/environments/openshift-local/cluster-bootstrap.sh
+```
+
+Or provision the local OpenShift bootstrap flow with Terraform:
+
+```bash
+cd terraform/environments/local/openshift
+terraform init
+terraform apply
+```
+
+After the cluster is up, configure your shell for the bundled CLIs:
+
+```bash
+eval $(crc oc-env)
+eval $(crc podman-env)
+```
+
+Deploy the application:
+
+```bash
+./scripts/environments/openshift-local/deploy.sh
+```
+
+This flow now uses the active OpenShift project instead of trying to create a dedicated namespace, and it deploys a single-node Kafka inside that same project to stay closer to a restricted sandbox-style environment.
+
+The route host is assigned by OpenShift. After deploy, inspect it with:
+
+```bash
+oc get route api -o jsonpath='{.spec.host}'
+```
+
 ---
 
 # Project Structure
@@ -422,16 +469,13 @@ curl --resolve api.local:80:${INGRESS_IP} http://api.local/job \
 .
 ├── docker/                 # Local docker compose setup
 ├── docs/                   # Architecture documentation
-├── k8s/                    # Kubernetes manifests
-│   ├── api/
-│   ├── worker/
-│   ├── kafka/
-│   ├── observability/
-│   ├── reliability/
-│   └── apps/
+├── k8s/                    # Application manifests split by portability
+│   ├── base/
+│   └── overlays/
 ├── scripts/
 │   ├── environments/
 │   │   ├── local/         # Local development scripts
+│   │   ├── openshift-local/
 │   │   └── azure/         # Cloud deployment scripts
 │   └── general/           # Shared scripts (both local and cloud)
 ├── services/              # Application source code
@@ -439,6 +483,8 @@ curl --resolve api.local:80:${INGRESS_IP} http://api.local/job \
 │   └── worker/
 └── terraform/             # Infrastructure as Code
     ├── environments/
+    │   ├── local/
+    │   └── clouds/
     └── modules/
 ```
 
@@ -482,6 +528,7 @@ The worker processes the message and logs the result (word frequency analysis):
 - `Could not resolve host: api.local`: add `api.local` to `/etc/hosts` with the current ingress IP, or use `curl --resolve`.
 - `kubectl has no current context configured`: start Minikube or fetch AKS credentials before running the Kubernetes scripts.
 - `ImagePullBackOff` on AKS: confirm the images were pushed to the configured ACR and that the AKS kubelet identity can pull them.
+- `OpenShift image push fails`: confirm the active project is correct, that `eval $(crc podman-env)` was applied for local OpenShift, and that `oc registry info --public` returns a reachable registry route.
 
 # Future Improvements
 

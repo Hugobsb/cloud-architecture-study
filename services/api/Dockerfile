@@ -7,10 +7,8 @@ RUN npm ci --omit=dev
 
 COPY src ./src
 
-RUN addgroup -S nodejs && adduser -S nodejs -G nodejs \
-  && chown -R nodejs:nodejs /app
-
-USER nodejs
+RUN chgrp -R 0 /app \
+  && chmod -R g=u /app
 
 EXPOSE 3000
 

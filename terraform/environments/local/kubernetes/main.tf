@@ -3,7 +3,7 @@ terraform {
 }
 
 locals {
-  repo_root = abspath("${path.root}/../../..")
+  repo_root = abspath("${path.root}/../../../..")
 }
 
 resource "terraform_data" "local_cluster" {

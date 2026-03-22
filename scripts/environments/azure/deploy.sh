@@ -3,6 +3,7 @@ set -euo pipefail
 
 source scripts/lib/bootstrap.sh
 source scripts/lib/config.sh
+source scripts/lib/k8s.sh
 
 require_command kubectl "Install kubectl and authenticate against the AKS cluster."
 require_command docker "Install Docker to build the application images."
@@ -20,13 +21,13 @@ export WORKER_IMAGE
 echo "Deploying resources to AKS..."
 
 kubectl apply -f k8s/namespace.yaml
-kubectl apply -f k8s/api/api-service.yaml
-kubectl apply -f k8s/worker/worker-service.yaml
-kubectl apply -f k8s/kafka
-kubectl apply -f k8s/apps
-kubectl apply -f k8s/observability
-kubectl apply -f k8s/observability/dashboards
-kubectl apply -f k8s/reliability
+kubectl apply -f "${K8S_BASE_DIR}/api/api-service.yaml"
+kubectl apply -f "${K8S_BASE_DIR}/worker/worker-service.yaml"
+kubectl apply -f "${K8S_BASE_DIR}/kafka"
+kubectl apply -f "${K8S_KUBERNETES_OVERLAY_DIR}/apps"
+kubectl apply -f "${K8S_BASE_DIR}/observability"
+kubectl apply -f "${K8S_BASE_DIR}/observability/dashboards"
+kubectl apply -f "${K8S_BASE_DIR}/reliability"
 
 echo "Building images..."
 
@@ -40,7 +41,7 @@ docker push "$WORKER_IMAGE"
 
 echo "Deploying images to AKS..."
 
-envsubst < k8s/api/api-deployment.yaml | kubectl apply -f -
-envsubst < k8s/worker/worker-deployment.yaml | kubectl apply -f -
+envsubst < "${K8S_BASE_DIR}/api/api-deployment.yaml" | kubectl apply -f -
+envsubst < "${K8S_BASE_DIR}/worker/worker-deployment.yaml" | kubectl apply -f -
 
 echo "Deployment completed"
