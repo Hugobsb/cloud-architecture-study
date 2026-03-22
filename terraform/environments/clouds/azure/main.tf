@@ -11,8 +11,8 @@ provider "azurerm" {
   features {}
 }
 
-module "kubernetes" {
-  source = "../../modules/kubernetes"
+module "aks" {
+  source = "../../../modules/azure/aks"
 
   cluster_name        = var.cluster_name
   location            = var.location
@@ -23,10 +23,10 @@ module "kubernetes" {
 }
 
 module "registry" {
-  source = "../../modules/registry"
+  source = "../../../modules/azure/registry"
 
   registry_name        = var.registry_name
   resource_group_name  = var.resource_group
   location             = var.location
-  aks_kubelet_identity = module.kubernetes.kubelet_identity_object_id
+  aks_kubelet_identity = module.aks.kubelet_identity_object_id
 }
