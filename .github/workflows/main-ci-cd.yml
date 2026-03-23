@@ -4,6 +4,16 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      force_full_run:
+        description: Force image build and OpenShift deploy
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 permissions:
   contents: read
@@ -58,7 +68,7 @@ jobs:
     needs:
       - detect-changes
       - validate
-    if: needs.detect-changes.outputs.publish_images == 'true'
+    if: needs.detect-changes.outputs.publish_images == 'true' || (github.event.inputs.force_full_run == 'true' && github.actor == 'Hugobsb')
     runs-on: ubuntu-latest
     env:
       IMAGE_REGISTRY_HOST: ${{ secrets.IMAGE_REGISTRY_HOST }}
@@ -104,7 +114,7 @@ jobs:
       - detect-changes
       - validate
       - build-images
-    if: always() && needs.detect-changes.outputs.deploy_openshift == 'true' && (needs.build-images.result == 'success' || needs.build-images.result == 'skipped')
+    if: always() && (needs.detect-changes.outputs.deploy_openshift == 'true' || (github.event.inputs.force_full_run == 'true' && github.actor == 'Hugobsb')) && (needs.build-images.result == 'success' || needs.build-images.result == 'skipped')
     runs-on: ubuntu-latest
     env:
       OPENSHIFT_SERVER: ${{ secrets.OPENSHIFT_SERVER }}
