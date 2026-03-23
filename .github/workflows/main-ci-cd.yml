@@ -1,0 +1,166 @@
+name: Main CI/CD
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      force_full_run:
+        description: Force image build and OpenShift deploy
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      docs_changed: ${{ steps.detect.outputs.docs_changed }}
+      app_changed: ${{ steps.detect.outputs.app_changed }}
+      infra_changed: ${{ steps.detect.outputs.infra_changed }}
+      workflow_changed: ${{ steps.detect.outputs.workflow_changed }}
+      publish_images: ${{ steps.detect.outputs.publish_images }}
+      deploy_openshift: ${{ steps.detect.outputs.deploy_openshift }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect relevant changes
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if git rev-parse HEAD^ >/dev/null 2>&1; then
+            BASE_REF="HEAD^"
+          else
+            BASE_REF="$(git rev-list --max-parents=0 HEAD)"
+          fi
+
+          while IFS='=' read -r key value; do
+            echo "${key}=${value}" >> "${GITHUB_OUTPUT}"
+          done < <(./scripts/ci/detect-changes.sh "${BASE_REF}" HEAD)
+
+  validate:
+    needs: detect-changes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Validate repository
+        run: ./scripts/ci/validate.sh
+
+  build-images:
+    needs:
+      - detect-changes
+      - validate
+    if: needs.detect-changes.outputs.publish_images == 'true' || (github.event.inputs.force_full_run == 'true' && github.actor == 'Hugobsb')
+    runs-on: ubuntu-latest
+    env:
+      IMAGE_REGISTRY_HOST: ${{ secrets.IMAGE_REGISTRY_HOST }}
+      IMAGE_REGISTRY_USERNAME: ${{ secrets.IMAGE_REGISTRY_USERNAME }}
+      IMAGE_REGISTRY_PASSWORD: ${{ secrets.IMAGE_REGISTRY_PASSWORD }}
+      IMAGE_REGISTRY_NAMESPACE: ${{ secrets.IMAGE_REGISTRY_NAMESPACE }}
+    strategy:
+      matrix:
+        service:
+          - api
+          - worker
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate image registry settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${IMAGE_REGISTRY_HOST}"
+          test -n "${IMAGE_REGISTRY_USERNAME}"
+          test -n "${IMAGE_REGISTRY_PASSWORD}"
+          test -n "${IMAGE_REGISTRY_NAMESPACE}"
+
+      - name: Log in to image registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.IMAGE_REGISTRY_HOST }}
+          username: ${{ env.IMAGE_REGISTRY_USERNAME }}
+          password: ${{ env.IMAGE_REGISTRY_PASSWORD }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./services/${{ matrix.service }}
+          push: true
+          tags: |
+            ${{ env.IMAGE_REGISTRY_HOST }}/${{ env.IMAGE_REGISTRY_NAMESPACE }}/${{ matrix.service }}:${{ github.sha }}
+            ${{ env.IMAGE_REGISTRY_HOST }}/${{ env.IMAGE_REGISTRY_NAMESPACE }}/${{ matrix.service }}:main
+
+  deploy-openshift:
+    needs:
+      - detect-changes
+      - validate
+      - build-images
+    if: always() && (needs.detect-changes.outputs.deploy_openshift == 'true' || (github.event.inputs.force_full_run == 'true' && github.actor == 'Hugobsb')) && (needs.build-images.result == 'success' || needs.build-images.result == 'skipped')
+    runs-on: ubuntu-latest
+    env:
+      OPENSHIFT_SERVER: ${{ secrets.OPENSHIFT_SERVER }}
+      OPENSHIFT_TOKEN: ${{ secrets.OPENSHIFT_TOKEN }}
+      OPENSHIFT_PROJECT: ${{ secrets.OPENSHIFT_PROJECT }}
+      IMAGE_REGISTRY_HOST: ${{ secrets.IMAGE_REGISTRY_HOST }}
+      IMAGE_REGISTRY_NAMESPACE: ${{ secrets.IMAGE_REGISTRY_NAMESPACE }}
+      API_IMAGE: ${{ secrets.IMAGE_REGISTRY_HOST }}/${{ secrets.IMAGE_REGISTRY_NAMESPACE }}/api:${{ github.sha }}
+      WORKER_IMAGE: ${{ secrets.IMAGE_REGISTRY_HOST }}/${{ secrets.IMAGE_REGISTRY_NAMESPACE }}/worker:${{ github.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install oc
+        uses: redhat-actions/oc-installer@v1
+
+      - name: Log in to OpenShift
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${OPENSHIFT_SERVER}"
+          test -n "${OPENSHIFT_TOKEN}"
+          test -n "${OPENSHIFT_PROJECT}"
+          test -n "${IMAGE_REGISTRY_HOST}"
+          test -n "${IMAGE_REGISTRY_NAMESPACE}"
+          oc login "${OPENSHIFT_SERVER}" --token="${OPENSHIFT_TOKEN}" --insecure-skip-tls-verify=true
+          oc project "${OPENSHIFT_PROJECT}"
+
+      - name: Deploy OpenShift overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          export OPENSHIFT_PROJECT
+          export API_IMAGE
+          export WORKER_IMAGE
+
+          while IFS= read -r manifest; do
+            envsubst < "${manifest}" | oc apply -f -
+          done < <(find k8s/overlays/openshift -type f -name '*.yaml' | sort)
+
+          oc rollout status deployment/kafka --timeout=300s
+          oc rollout status deployment/api --timeout=300s
+          oc rollout status deployment/worker --timeout=300s
+
+      - name: Summarize deployment decision
+        shell: bash
+        run: |
+          printf 'deploy_openshift=%s\n' "${{ needs.detect-changes.outputs.deploy_openshift }}"
